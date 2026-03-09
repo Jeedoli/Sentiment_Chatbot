@@ -73,9 +73,17 @@ sentiment_chatbot/
 ## 🚀 빠른 시작
 
 ```bash
+# 0. Python 버전 확인 & pyenv 설정
+# 이 프로젝트는 macOS Apple Silicon 기준 Python 3.11.x(예: 3.11.9)를 사용.
+# pyenv 사용자의 경우 `.python-version` 파일이 루트에 있으므로
+#   pyenv install && cd 프로젝트 디렉터리만으로 자동 활성화.
+# 다른 버전일 경우 `pyenv local 3.11.9`로 맞추고, 시스템 Python이면
+#   적절한 3.11.x를 설치한 뒤 `poetry env use python3.11`을 실행할 것!
+
 # 1. 의존성 설치
 poetry install
-pip install torch torchvision torchaudio   # 별도 설치
+# torch는 플랫폼별로 별도 설치(아래 추가 설명 참조)
+pip install torch torchvision torchaudio   # macOS
 
 # 2. 환경 변수 설정
 cp .env.example .env
