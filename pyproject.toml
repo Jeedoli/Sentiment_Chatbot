@@ -4,7 +4,23 @@ version     = "0.1.0"
 description = "고객 문의 감정 분석 기반 AI 챗봇 서비스"
 authors     = ["Your Name <you@example.com>"]
 readme      = "README.md"
-package-mode = false
+package-mode = true
+
+# poetry 기본 동작은 패키지명이름과 같은 디렉터리를 찾아
+# 설치하려고 합니다. 이 프로젝트는 여러 개의 최상위
+# 패키지(api, models, services 등)를 갖고 있으므로
+# 명시적으로 나열해 주어야 합니다.
+# 설치 후 `import models` 등으로 접근할 수 있습니다.
+
+packages = [
+  { include = "api" },
+  { include = "chains" },
+  { include = "core" },
+  { include = "models" },
+  { include = "schema" },
+  { include = "services" },
+]
+
 
 [tool.poetry.dependencies]
 python              = ">=3.11,<3.13"

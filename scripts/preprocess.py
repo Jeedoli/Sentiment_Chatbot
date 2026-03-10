@@ -7,12 +7,11 @@ scripts/preprocess.py
 [지원 데이터소스]
   A. HuggingFace datasets (nsmc / kornli 등)
   B. 로컬 CSV 파일 (path 지정)
-  C. 합성 샘플 데이터 (데이터 없을 때 데모용)
+     → 먼저 scripts/generate_samples.py 를 실행해 data/raw/synthetic_reviews.csv 생성
 
 [실행]
   poetry run python scripts/preprocess.py --source nsmc
-  poetry run python scripts/preprocess.py --source local --csv_path data/raw/reviews.csv
-  poetry run python scripts/preprocess.py --source sample
+  poetry run python scripts/preprocess.py --source local --csv_path data/raw/synthetic_reviews.csv
 
 [출력]
   data/processed/train.csv
@@ -78,40 +77,6 @@ def load_local_csv(path: str) -> pd.DataFrame:
     return df[["text", "label"]]
 
 
-# ── C. 합성 샘플 데이터 ──────────────────────────────────────────────────
-def make_sample_data() -> pd.DataFrame:
-    """
-    데이터가 없을 때 파이프라인 동작을 확인하기 위한 데모용 샘플.
-    실제 서비스에서는 사용하지 마세요.
-    """
-    rows = [
-        # 부정(0)
-        ("배송이 너무 늦어요. 3주째 기다리고 있어요.", 0),
-        ("상품이 파손된 채로 도착했습니다. 환불 요청합니다.", 0),
-        ("설명과 전혀 다른 제품이에요. 실망이에요.", 0),
-        ("고객센터 연결이 안 됩니다. 화가 많이 납니다.", 0),
-        ("이런 제품 처음 봤어요. 진짜 불량품이에요.", 0),
-        ("사기당한 기분이에요. 다신 여기서 안 삽니다.", 0),
-        ("포장이 엉망이고 제품도 이미 뜯겨있었어요.", 0),
-        ("AS 거부당했어요. 너무 부당한 처우예요.", 0),
-        # 중립(1)
-        ("제품은 평범하고 배송은 보통이었습니다.", 1),
-        ("나쁘지 않은데 특별히 좋지도 않아요.", 1),
-        ("가격 대비 무난한 상품입니다.", 1),
-        ("배송 조금 늦었지만 제품은 괜찮았어요.", 1),
-        ("기대한 것과 비슷하게 도착했습니다.", 1),
-        ("좋은 점도 있고 아쉬운 점도 있어요.", 1),
-        # 긍정(2)
-        ("포장이 꼼꼼하고 빠른 배송 감사해요!", 2),
-        ("상품 품질이 정말 좋아요. 재구매 의사 있어요.", 2),
-        ("친절한 고객서비스 덕분에 문제가 금방 해결됐어요.", 2),
-        ("가격도 착하고 품질도 최고예요!", 2),
-        ("설명대로 딱 맞게 와서 너무 만족스러워요.", 2),
-        ("완벽한 구매였어요. 주변에 추천하겠습니다!", 2),
-    ]
-    return pd.DataFrame(rows, columns=["text", "label"])
-
-
 # ── 분할 후 저장 ─────────────────────────────────────────────────────────
 def save_splits(df: pd.DataFrame) -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -135,9 +100,9 @@ def save_splits(df: pd.DataFrame) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="감정 데이터 전처리")
-    parser.add_argument("--source",   default="sample",
-                        choices=["nsmc", "local", "sample"],
-                        help="데이터 소스 선택")
+    parser.add_argument("--source",   default="local",
+                        choices=["nsmc", "local"],
+                        help='데이터 소스 선택 ("nsmc" or "local")')
     parser.add_argument("--csv_path", default="data/raw/reviews.csv",
                         help="--source local 사용 시 CSV 경로")
     args = parser.parse_args()
@@ -149,8 +114,7 @@ def main() -> None:
         print(f"[preprocess] 로컬 CSV 로드: {args.csv_path}")
         df = load_local_csv(args.csv_path)
     else:
-        print("[preprocess] 샘플 데이터 생성 중…")
-        df = make_sample_data()
+        raise ValueError(f"지원하지 않는 소스: {args.source}")
 
     print(f"[preprocess] 원본 데이터 {len(df):,} rows")
     save_splits(df)
