@@ -105,13 +105,19 @@ class TestSentimentDataset:
 
     def test_dataset_len(self, sample_csv):
         from scripts.train import SentimentDataset
-        ds = SentimentDataset(sample_csv, max_length=32)
+        from transformers import AutoTokenizer
+
+        tok = AutoTokenizer.from_pretrained("klue/roberta-base")
+        ds = SentimentDataset(sample_csv, tok, max_len=32)
         assert len(ds) == 3
 
     def test_dataset_item_keys(self, sample_csv):
         from scripts.train import SentimentDataset
-        ds = SentimentDataset(sample_csv, max_length=32)
+        from transformers import AutoTokenizer
+
+        tok = AutoTokenizer.from_pretrained("klue/roberta-base")
+        ds = SentimentDataset(sample_csv, tok, max_len=32)
         item = ds[0]
         assert "input_ids"      in item
         assert "attention_mask" in item
-        assert "labels"         in item
+        assert "label"          in item
