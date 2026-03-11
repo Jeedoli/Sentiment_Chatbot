@@ -156,9 +156,12 @@ def train(
 
     # ── 최종 분류 리포트 ───────────────────────────────────────────────
     print("\n=== Classification Report ===")
-    print(classification_report(all_labels, all_preds,
-                                 target_names=["부정", "중립", "긍정"],
-                                 digits=4))
+    try:
+        print(classification_report(all_labels, all_preds,
+                                     target_names=["부정", "중립", "긍정"],
+                                     digits=4))
+    except ValueError:
+        print("[train] classification report skipped (insufficient classes)")
 
 
 def parse_args() -> argparse.Namespace:
