@@ -22,6 +22,7 @@ scripts/preprocess.py
 """
 
 import argparse
+import glob
 import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -54,36 +55,81 @@ def load_nsmc() -> pd.DataFrame:
 # ── B. 로컬 CSV 로드 ─────────────────────────────────────────────────────
 def load_local_csv(path: str) -> pd.DataFrame:
     """
-    로컬 CSV를 불러옵니다.
+    로컬 데이터 파일을 불러옵니다. 다음 형식들을 지원합니다:
 
-    CSV 형식 가이드:
-      - text    : 텍스트 컬럼 (필수)
-      - label   : 0/1/2 정수 또는 '부정'/'중립'/'긍정' 문자열 (필수)
-      - rating  : 별점(1-5) 있으면 자동 label 변환
+      * 단일 CSV (`.csv`)
+      * 단일 Excel (`.xls`, `.xlsx`)
+      * 디렉터리: 안의 모든 CSV/Excel 파일을 읽어 병합
+      * ZIP 파일: 내부에 있는 CSV/Excel을 임시로 풀어 처리
+
+    반환되는 데이터프레임은 `text`/`label` 또는 `rating` 컬럼을
+    갖고 있어야 하며, `rating`이 있으면 자동으로 0/1/2로 변환됩니다.
     """
-    df = pd.read_csv(path)
+    def _normalize(df: pd.DataFrame) -> pd.DataFrame:
+        # 별점 → 라벨
+        if "rating" in df.columns and "label" not in df.columns:
+            df["label"] = df["rating"].apply(
+                lambda r: 0 if r <= 2 else (1 if r == 3 else 2)
+            )
+        # 한글 레이블 → 정수
+        if df.get("label") is not None and df["label"].dtype == object:
+            kmap = {
+                "부정": 0,
+                "중립": 1,
+                "긍정": 2,
+                "negative": 0,
+                "neutral": 1,
+                "positive": 2,
+            }
+            df["label"] = df["label"].astype(str).str.strip().map(kmap)
+        df = df.dropna(subset=["text", "label"])
+        df["label"] = df["label"].astype(int)
+        return df[["text", "label"]]
 
-    # 별점으로 라벨 자동 생성 옵션
-    if "rating" in df.columns and "label" not in df.columns:
-        df["label"] = df["rating"].apply(lambda r: 0 if r <= 2 else (1 if r == 3 else 2))
+    # --- 입력 종류별 처리 ------------------------------------------------
+    if os.path.isdir(path):
+        frames: list[pd.DataFrame] = []
+        for ext in ("*.csv", "*.xls", "*.xlsx"):
+            for fn in glob.glob(os.path.join(path, ext)):
+                if fn.lower().endswith((".xls", ".xlsx")):
+                    frames.append(pd.read_excel(fn))
+                else:
+                    frames.append(pd.read_csv(fn))
+        if not frames:
+            raise FileNotFoundError(f"디렉터리에 읽을 파일이 없습니다: {path}")
+        df = pd.concat(frames, ignore_index=True)
+    elif path.lower().endswith((".xls", ".xlsx")):
+        df = pd.read_excel(path)
+    elif path.lower().endswith(".zip"):
+        import tempfile, zipfile
 
-    # 한글 레이블 → 정수 변환
-    if df["label"].dtype == object:
-        kmap = {"부정": 0, "중립": 1, "긍정": 2, "negative": 0, "neutral": 1, "positive": 2}
-        df["label"] = df["label"].str.strip().map(kmap)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with zipfile.ZipFile(path) as z:
+                z.extractall(tmpdir)
+            # 재귀 호출로 풀어낸 디렉터리를 처리
+            df = load_local_csv(tmpdir)
+    else:
+        df = pd.read_csv(path)
 
-    df = df.dropna(subset=["text", "label"])
-    df["label"] = df["label"].astype(int)
-    return df[["text", "label"]]
+    return _normalize(df)
 
 
 # ── 분할 후 저장 ─────────────────────────────────────────────────────────
 def save_splits(df: pd.DataFrame) -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
 
-    # 스트래티파이드 8:1:1 분할
-    df_tr, df_tmp = train_test_split(df, test_size=0.2, stratify=df["label"], random_state=42)
-    df_val, df_te = train_test_split(df_tmp, test_size=0.5, stratify=df_tmp["label"], random_state=42)
+    # 스트래티파이드 8:1:1 분할 (데이터가 너무 작으면 stratify 없이 실행)
+    try:
+        df_tr, df_tmp = train_test_split(
+            df, test_size=0.2, stratify=df["label"], random_state=42
+        )
+        df_val, df_te = train_test_split(
+            df_tmp, test_size=0.5, stratify=df_tmp["label"], random_state=42
+        )
+    except ValueError:
+        # 행 수가 적거나 클래스가 하나뿐인 경우
+        df_tr, df_tmp = train_test_split(df, test_size=0.2, random_state=42)
+        df_val, df_te = train_test_split(df_tmp, test_size=0.5, random_state=42)
 
     df_tr.to_csv(f"{OUT_DIR}/train.csv", index=False, encoding="utf-8-sig")
     df_val.to_csv(f"{OUT_DIR}/val.csv",  index=False, encoding="utf-8-sig")
