@@ -75,16 +75,20 @@ def respond(message: str, history: list[list]) -> tuple[str, list[list], str, st
             "  2. poetry run pip install torch\n"
             "  3. poetry run python scripts/train.py\n"
         )
-        history.append([message, tip])
+        # gradio 6.x Chatbot requires messages to be dicts with role/content
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": tip})
         return "", history, "", ""
     except Exception as e:
         logger.error(f"chat error: {e}")
-        history.append([message, f"오류가 발생했습니다: {e}"])
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": f"오류가 발생했습니다: {e}"})
         return "", history, "", ""
 
     # 대화 히스토리 업데이트
     escalate_note = "\n\n---\n📞 전문 상담원 연결을 원하시면 **#상담원연결** 을 입력해 주세요." if result.escalate else ""
-    history.append([message, result.answer + escalate_note])
+    history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": result.answer + escalate_note})
 
     # 감정 분석 텍스트
     s = result.sentiment
