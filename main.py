@@ -63,6 +63,11 @@ app.include_router(chat_router,     prefix="/api/v1")
 app.include_router(analysis_router, prefix="/api/v1")
 
 
+@app.get("/", tags=["헬스체크"])
+def root():
+    """기본 루트. 200을 반환하여 테스트와 헬스체크가 통과되도록 함."""
+    return {"status": "ok", "service": "SentiChat API", "version": "1.0.0"}
+
 @app.get("/health", tags=["헬스체크"])
 def health():
     """서버 상태 확인"""
