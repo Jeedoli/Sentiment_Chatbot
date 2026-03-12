@@ -53,6 +53,92 @@ def load_nsmc() -> pd.DataFrame:
 
 
 # ── B. 로컬 CSV 로드 ─────────────────────────────────────────────────────
+def load_aihub_dir(path: str) -> pd.DataFrame:
+    """
+    AI Hub 다운로드 폴더를 통합해 단일 데이터프레임으로 반환.
+    `path` 는 `Training/01.원천데이터`와 `Training/02.라벨링데이터`
+    가 들어있는 상위 디렉터리여야 합니다.
+
+    - `원천데이터`의 엑셀/CSV에서 `Index`, `RawText` 를 읽음
+    - `라벨링데이터` ZIP 안의 JSON을 파싱하여 `GeneralPolarity`를 가져옴
+    - 두 테이블을 `Index`로 병합하고 부정/중립/긍정을 0/1/2로 변환
+    """
+    import zipfile, json
+
+    # raw text
+    raws = []
+    for ext in ("*.xls", "*.xlsx", "*.csv"):
+        raws.extend(glob.glob(os.path.join(path, "**", ext), recursive=True))
+    if not raws:
+        raise FileNotFoundError(f"원천데이터 파일이 없습니다: {path}")
+    df_raws = []
+    for f in raws:
+        try:
+            if f.lower().endswith(('.xls', '.xlsx')):
+                df_raws.append(pd.read_excel(f))
+            else:
+                df_raws.append(pd.read_csv(f))
+        except Exception:
+            continue
+    df_raw = pd.concat(df_raws, ignore_index=True)
+    # normalize column names to handle INDEX vs Index
+    df_raw.columns = [c.strip().lower() for c in df_raw.columns]
+    if "index" in df_raw.columns:
+        df_raw = df_raw.rename(columns={"index": "Index"})
+
+    # labels
+    labels = []
+    for zpath in glob.glob(os.path.join(path, "**", "*.zip"), recursive=True):
+        with zipfile.ZipFile(zpath) as z:
+            for name in z.namelist():
+                try:
+                    with z.open(name) as nh:
+                        js = json.load(nh)
+                        labels.extend(js)
+                except Exception:
+                    continue
+    if not labels:
+        raise FileNotFoundError(f"라벨링데이터가 없습니다: {path}")
+    df_label = pd.DataFrame(labels)
+    df_label.columns = [c.strip().lower() for c in df_label.columns]
+    if "index" in df_label.columns:
+        df_label = df_label.rename(columns={"index": "Index"})
+
+    # merge
+    if "Index" in df_raw.columns and "Index" in df_label.columns:
+        df_raw["Index"] = df_raw["Index"].astype(str)
+        df_label["Index"] = df_label["Index"].astype(str)
+        df = df_raw.merge(df_label, on="Index", how="inner")
+    else:
+        raise KeyError("Index 컬럼이 없어 AI Hub 병합을 할 수 없습니다.")
+
+    # normalize polarity
+    def mappol(x):
+        try:
+            v = int(x)
+        except Exception:
+            return 1
+        return { -1:0, 0:1, 1:2 }.get(v, 1)
+
+    # GeneralPolarity 필드가 대소문자 다를 수 있음
+    if "GeneralPolarity" in df.columns:
+        polcol = "GeneralPolarity"
+    elif "generalpolarity" in df.columns:
+        polcol = "generalpolarity"
+    else:
+        raise KeyError("GeneralPolarity 컬럼이 없습니다.")
+    df["label"] = df[polcol].map(mappol)
+    # text 컬럼도 RawText 또는 rawtext
+    if "RawText" in df.columns:
+        txtcol = "RawText"
+    elif "rawtext" in df.columns:
+        txtcol = "rawtext"
+    else:
+        raise KeyError("RawText 컬럼이 없습니다.")
+    df["text"] = df[txtcol].astype(str)
+    return df[["text", "label"]]
+
+
 def load_local_csv(path: str) -> pd.DataFrame:
     """
     로컬 데이터 파일을 불러옵니다. 다음 형식들을 지원합니다:
@@ -119,6 +205,14 @@ def save_splits(df: pd.DataFrame) -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
 
     # 스트래티파이드 8:1:1 분할 (데이터가 너무 작으면 stratify 없이 실행)
+    # 아주 작은 데이터셋이면 stratify 없이 단순 분할하거나 그대로 저장
+    if len(df) < 3:
+        os.makedirs(OUT_DIR, exist_ok=True)
+        df.to_csv(f"{OUT_DIR}/train.csv", index=False, encoding="utf-8-sig")
+        df.iloc[0:0].to_csv(f"{OUT_DIR}/val.csv", index=False, encoding="utf-8-sig")
+        df.iloc[0:0].to_csv(f"{OUT_DIR}/test.csv", index=False, encoding="utf-8-sig")
+        print("[preprocess] 데이터가 매우 적어 전체를 train에 저장함")
+        return
     try:
         df_tr, df_tmp = train_test_split(
             df, test_size=0.2, stratify=df["label"], random_state=42
@@ -158,7 +252,12 @@ def main() -> None:
         df = load_nsmc()
     elif args.source == "local":
         print(f"[preprocess] 로컬 CSV 로드: {args.csv_path}")
-        df = load_local_csv(args.csv_path)
+        # AI Hub 스타일 디렉터리일 경우 자동 병합
+        if os.path.isdir(args.csv_path) and any("원천" in p for p in os.listdir(args.csv_path)):
+            print("[preprocess] AI Hub 원천/라벨 데이터 탐지, 병합 중…")
+            df = load_aihub_dir(args.csv_path)
+        else:
+            df = load_local_csv(args.csv_path)
     else:
         raise ValueError(f"지원하지 않는 소스: {args.source}")
 
