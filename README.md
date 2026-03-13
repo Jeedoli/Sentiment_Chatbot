@@ -72,52 +72,39 @@ sentiment_chatbot/
 
 ## 🔧 Workflow
 
+이 프로젝트는 아래 5단계로 구성됩니다.
 
-1. **모델 준비**
-   - Hugging Face Hub에 공개된 사전학습 모델(`klue/roberta-base`)을
-     `transformers` 라이브러리의 `AutoModel.from_pretrained()`로 불러옵니다.
-     이때 문자열 ID만 전달하면 내부적으로 필요한 가중치 파일이
-     자동으로 다운로드 되어 로컬 캐시에 저장됩니다.
-   - 사전학습 모델은 이미 학습이 완료된 상태이며, 이 저장된 가중치가
-     곧 "기본 모델" 역할을 합니다. 따라서 별도의 `poetry add`
-     같은 설치 과정은 필요하지 않습니다.
+1. **데이터 준비**
+   - AI Hub, NSMC, 로컬 CSV/Excel/ZIP 등 다양한 형태의 데이터를
+     `scripts/preprocess.py`로 읽어 `data/processed/train.csv`,
+     `val.csv`, `test.csv`로 변환합니다.
+   - `--csv_path`에 디렉터리 또는 ZIP 경로를 지정하면 자동으로 내부
+     파일을 모두 찾아서 병합합니다.
+   - AI Hub 같은 경우, `data/aihub_dataset/Training` 아래에
+     `01.원천데이터`/`02.라벨링데이터` 구조만 맞추면 자동 병합됩니다.
 
-2. **데이터 수집 및 전처리**
-   - 외부 데이터셋(NSMC, 쇼핑몰 리뷰 등) 또는 로컬 CSV/XLSX/ZIP을
-    `preprocess.py`로 읽어서 `train.csv`/`val.csv`/`test.csv`로 분할합니다.
-    (AI Hub 다운로드물처럼 여러 파일이 섞여 있어도 디렉터리나 ZIP을
-    지정하면 자동으로 합쳐집니다; Excel을 읽으려면 `openpyxl`이 필요합니다.)
-   - 간단한 규칙 기반 샘플을 생성하거나 OpenAI/LLM을 활용하여
-     라벨을 자동 부착할 수도 있습니다.
-   - 텍스트는 토크나이저 입력에 적합하도록 정제(pandas)하고,
-     `MAX_LEN`에 맞춰 트렁케이션/패딩합니다.
+2. **모델 학습**
+   - `scripts/train.py`를 실행하면 `train.csv`/`val.csv`를 읽어
+     `klue/roberta-base` 기반 분류 모델을 fine‑tune 합니다.
+   - 학습 중 `runs/` 디렉터리에 TensorBoard 로그가 자동 생성됩니다.
+     ```bash
+     tensorboard --logdir runs
+     ```
+   - 학습 중 **val F1이 개선될 때마다** `saved_models/sentiment_best.pt`가
+     갱신되고, 마지막 에폭 모델은 `saved_models/sentiment_last.pt`에 저장됩니다.
 
-3. **모델 학습 (딥러닝)**
-   - PyTorch를 사용하여 위에서 불러온 RoBERTa 인코더 위에
-     간단한 분류 헤드(linear layer)를 얹고, 전체 네트워크를
-     fine‑tune합니다. 즉, 입력 텍스트 → encoder → [CLS] 토큰 →
-     Dropout → Linear → Softmax 순서로 동작합니다.
-   - 최적화는 `AdamW`, 러닝레이트 스케줄러(warmup), 미니배치,
-     교차엔트로피 손실을 사용합니다. 에폭 동안 val F1이
-     올라가면 `sentiment_best.pt`를 저장합니다.
-   - 이는 전형적인 딥러닝 파이프라인이며, 학습 스크립트가
-     여러 하이퍼파라미터를 CLI 옵션으로 받습니다.
+3. **RAG 벡터스토어 구축**
+   - `knowledge_base/` 폴더의 `.txt` 문서를 FAISS 벡터스토어로 변환합니다.
+   - `scripts/build_vectorstore.py`를 실행하면 `data/vectorstore/`가 생성됩니다.
 
-4. **추론/서비스**
-   - 학습된 체크포인트를 `SentimentInference`로 로드하여
-     API/챗봇에서 사용할 수 있도록 합니다. 이 단계는
-     순수한 추론(딥러닝 forward pass)이며, CPU/GPU 모두 지원.
-   - FastAPI 서버 또는 Gradio UI가 사용자 입력을 받아
-     감정 확률을 생성하고, 필요시 RAG 검색 후 LLM을 호출합니다.
+4. **서버 실행 (API / UI)**
+   - FastAPI: `poetry run uvicorn main:app --reload`
+   - Gradio 데모: `poetry run python app.py`
 
-5. **RAG 챗봇**
-   - 감정 결과와 검색된 FAQ 문서를 시스템/사용자 프롬프트에
-     넣어 LangChain LCEL 체인을 실행합니다. 여기서도
-     OpenAI GPT 모델을 사용하므로 요청당 과금이 발생합니다.
-
-이 워크플로우는 전통적인 머신러닝과 딥러닝 절차를 따르며,
-데이터 전처리 → 모델 로드 → fine-tuning → 배포/추론이라는
-흐름으로 전개됩니다.
+5. **추론 / 챗봇**
+   - 클라이언트에서 입력된 텍스트를 감정분석하고, 필요시 RAG 검색 결과를
+     합쳐서 GPT 모델에 전달합니다.
+   - 부정 비율이 70% 이상인 경우 `escalate=True`로 상담원 연결 유도 기능을 사용합니다.
 
 ---
 
