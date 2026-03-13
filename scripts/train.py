@@ -23,6 +23,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.tensorboard import SummaryWriter
 from transformers import AutoTokenizer, get_linear_schedule_with_warmup
 from sklearn.metrics import f1_score, classification_report
 from tqdm import tqdm
@@ -99,6 +100,11 @@ def train(
     os.makedirs(save_dir, exist_ok=True)
     best_f1       = 0.0
 
+    # TensorBoard logging
+    log_dir = os.path.join("runs", os.path.basename(save_dir))
+    writer = SummaryWriter(log_dir=log_dir)
+    print(f"[train] TensorBoard logs -> {log_dir}")
+
     for epoch in range(1, epochs + 1):
         # ── Train ──────────────────────────────────────────────────────
         model.train()
@@ -138,11 +144,17 @@ def train(
                 all_labels += batch["label"].tolist()
 
         f1 = f1_score(all_labels, all_preds, average="macro")
+        val_lr = scheduler.get_last_lr()[0]
         print(
             f"Epoch {epoch:3d}/{epochs}  "
             f"train_loss={avg_train:.4f}  val_f1={f1:.4f}  "
-            f"lr={scheduler.get_last_lr()[0]:.2e}"
+            f"lr={val_lr:.2e}"
         )
+
+        # TensorBoard
+        writer.add_scalar("train/loss", avg_train, epoch)
+        writer.add_scalar("val/f1", f1, epoch)
+        writer.add_scalar("val/lr", val_lr, epoch)
 
         # ── 베스트 저장 ─────────────────────────────────────────────────
         if f1 > best_f1:
@@ -153,6 +165,9 @@ def train(
     # 마지막 에폭 저장
     torch.save(model.state_dict(), os.path.join(save_dir, "sentiment_last.pt"))
     print(f"\n[train] 완료. Best val_F1={best_f1:.4f}")
+
+    writer.flush()
+    writer.close()
 
     # ── 최종 분류 리포트 ───────────────────────────────────────────────
     print("\n=== Classification Report ===")
