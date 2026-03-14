@@ -23,15 +23,30 @@ from api.routes.analysis import router as analysis_router
 from core.config import get_settings
 from core.logging import logger
 
+from services import rag_service, sentiment_service
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """앱 시작 시 설정 검증, 종료 시 정리."""
+    """앱 시작 시 설정 검증, 초기화, 종료 시 정리."""
     cfg = get_settings()
     logger.info(f"SentiChat API 시작 — model: {cfg.sentiment_model_name}")
+
     if not cfg.openai_api_key:
         logger.warning("OPENAI_API_KEY 가 설정되지 않았습니다. 챗봇 기능이 비활성화됩니다.")
+
+    # 첫 요청 전에 모델/벡터스토어를 미리 로드하여 초기 지연을 줄임
+    logger.info("모델/벡터스토어 워밍업 시작")
+    try:
+        # 감정 모델 로드
+        sentiment_service.get_sentiment_service()
+        # 벡터스토어 로드 (없으면 경고만 남김)
+        rag_service.get_vectorstore()
+    except Exception as e:
+        logger.warning(f"워밍업 중 예외 발생: {e}")
+
     yield
+
     logger.info("SentiChat API 종료")
 
 

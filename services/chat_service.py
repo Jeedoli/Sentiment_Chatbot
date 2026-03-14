@@ -18,6 +18,7 @@ services/chat_service.py
   ChatResponse 반환
 """
 
+import time
 from collections import defaultdict
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -64,25 +65,36 @@ async def chat(session_id: str, message: str) -> ChatResponse:
     logger.info(f"[chat] session={session_id} | msg={message[:50]}")
 
     # 1. 감정 분석
+    t0 = time.perf_counter()
     sentiment_out = sentiment_service.analyze(message)
+    t1 = time.perf_counter()
+
     logger.info(
         f"[sentiment] {sentiment_out.label_str} "
-        f"(neg={sentiment_out.negative:.2f} pos={sentiment_out.positive:.2f})"
+        f"(neg={sentiment_out.negative:.2f} pos={sentiment_out.positive:.2f}) "
+        f"(t={t1-t0:.2f}s)"
     )
 
     # 2. RAG 검색
+    t0 = time.perf_counter()
     retrieved = rag_service.retrieve(message)
+    t1 = time.perf_counter()
     context   = "\n\n".join(retrieved) if retrieved else ""
     sources   = [chunk[:60] + "…" for chunk in retrieved]
 
+    logger.info(f"[rag] retrieved={len(retrieved)} (t={t1-t0:.2f}s)")
+
     # 3. LLM 응답 생성 (히스토리 포함)
     history = _history[session_id]
+    t0 = time.perf_counter()
     answer  = await _chat_chain.ainvoke(
         message   = message,
         sentiment = sentiment_out,
         context   = context,
         history   = history,
     )
+    t1 = time.perf_counter()
+    logger.info(f"[llm] response time {t1-t0:.2f}s")
 
     # 4. 히스토리 업데이트 (최대 N턴 유지)
     history.append(HumanMessage(content=message))
