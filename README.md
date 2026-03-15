@@ -2,6 +2,9 @@
 
 > klue/roberta-base 파인튜닝 + LangChain RAG 파이프라인으로 고객 문의의 감정을 실시간 분석하고,  
 > 감정 상태에 맞는 응답을 자동 생성하는 서비스입니다.
+>
+> **주의**: 이 저장소는 학습/실험 목적의 데모이며, 상용 서비스 수준의 안정성/보안/스케일링을 보장하지 않습니다.
+> 실제 서비스용으로 사용할 때는 별도 검증과 보안 강화, 비용 관리를 반드시 수행해야 합니다.
 
 ---
 
@@ -128,7 +131,9 @@ cp .env.example .env
 # .env 에서 OPENAI_API_KEY 입력
 
 # 3. 샘플 데이터로 테스트 학습 (10 에폭, ~2분)
-poetry run python scripts/preprocess.py --source sample
+# (샘플 데이터가 없으면 아래 명령으로 생성)
+poetry run python scripts/generate_samples.py
+poetry run python scripts/preprocess.py --source local --csv_path data/raw/synthetic_all.csv
 poetry run python scripts/train.py --epochs 10
 
 # 4. RAG 벡터스토어 빌드
