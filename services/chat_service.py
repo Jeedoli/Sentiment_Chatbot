@@ -21,9 +21,21 @@ services/chat_service.py
 import time
 from collections import defaultdict
 
-from langchain_core.messages import AIMessage, HumanMessage
+try:
+    # FastAPI가 설치된 환경에서는 이벤트 루프를 블로킹하지 않기 위해 run_in_threadpool 사용
+    from fastapi.concurrency import run_in_threadpool
+except ImportError:  # 테스트/CI 환경에서 FastAPI가 없을 수도 있음
+    def run_in_threadpool(func, *args, **kwargs):
+        return func(*args, **kwargs)
 
-from chains.qa_chain import SentimentChatChain
+try:
+    from langchain_core.messages import AIMessage, HumanMessage
+    from chains.qa_chain import SentimentChatChain
+except ImportError:  # 테스트/CI 환경 또는 langchain 미설치 시
+    AIMessage = None  # type: ignore
+    HumanMessage = None  # type: ignore
+    SentimentChatChain = None  # type: ignore
+
 from core.config import get_settings
 from core.logging import logger
 from models.sentiment import SentimentOutput
@@ -36,8 +48,8 @@ from services import rag_service, sentiment_service
 # 실제 서비스에서는 Redis나 DB로 교체하세요.
 _history: dict[str, list] = defaultdict(list)
 
-# 체인 singleton
-_chat_chain = SentimentChatChain()
+# 체인 singleton (LangChain 미설치 환경에서는 None)
+_chat_chain = SentimentChatChain() if SentimentChatChain is not None else None
 
 
 def _to_schema(so: SentimentOutput) -> SentimentResult:
@@ -64,9 +76,9 @@ async def chat(session_id: str, message: str) -> ChatResponse:
     cfg = get_settings()
     logger.info(f"[chat] session={session_id} | msg={message[:50]}")
 
-    # 1. 감정 분석
+    # 1. 감정 분석 (CPU/GPU 추론이므로 이벤트 루프를 블로킹하지 않도록 스레드에서 실행)
     t0 = time.perf_counter()
-    sentiment_out = sentiment_service.analyze(message)
+    sentiment_out = await run_in_threadpool(sentiment_service.analyze, message)
     t1 = time.perf_counter()
 
     logger.info(
@@ -75,9 +87,9 @@ async def chat(session_id: str, message: str) -> ChatResponse:
         f"(t={t1-t0:.2f}s)"
     )
 
-    # 2. RAG 검색
+    # 2. RAG 검색 (OpenAI API 호출/디스크 I/O 등이 포함될 수 있어 비동기 스레드 사용)
     t0 = time.perf_counter()
-    retrieved = rag_service.retrieve(message)
+    retrieved = await run_in_threadpool(rag_service.retrieve, message)
     t1 = time.perf_counter()
     context   = "\n\n".join(retrieved) if retrieved else ""
     sources   = [chunk[:60] + "…" for chunk in retrieved]
@@ -85,6 +97,12 @@ async def chat(session_id: str, message: str) -> ChatResponse:
     logger.info(f"[rag] retrieved={len(retrieved)} (t={t1-t0:.2f}s)")
 
     # 3. LLM 응답 생성 (히스토리 포함)
+    if _chat_chain is None:
+        raise RuntimeError(
+            "LangChain이 설치되어 있지 않아 LLM 응답을 생성할 수 없습니다. "
+            "pip install langchain langchain-openai 등을 설치해주세요."
+        )
+
     history = _history[session_id]
     t0 = time.perf_counter()
     answer  = await _chat_chain.ainvoke(

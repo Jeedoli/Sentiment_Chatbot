@@ -37,13 +37,20 @@ async def lifespan(app: FastAPI):
 
     # 첫 요청 전에 모델/벡터스토어를 미리 로드하여 초기 지연을 줄임
     logger.info("모델/벡터스토어 워밍업 시작")
+
+    # 감정 분석 모델은 서비스의 핵심 기능이므로 미로드 시 시작 자체를 중단
     try:
-        # 감정 모델 로드
         sentiment_service.get_sentiment_service()
-        # 벡터스토어 로드 (없으면 경고만 남김)
-        rag_service.get_vectorstore()
     except Exception as e:
-        logger.warning(f"워밍업 중 예외 발생: {e}")
+        logger.exception("감정 분석 모델 로드 실패 (서비스를 시작할 수 없습니다)")
+        raise
+
+    # 벡터스토어는 외부 문서가 없는 경우에도 서비스 기능을 유지할 수 있으므로
+    # 실패 시에도 서버가 계속 켜지도록 하되, 로그로 남김.
+    try:
+        rag_service.get_vectorstore()
+    except Exception:
+        logger.exception("벡터스토어 로드 중 예외 발생")
 
     yield
 
