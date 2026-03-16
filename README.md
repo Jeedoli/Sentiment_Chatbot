@@ -102,7 +102,10 @@ sentiment_chatbot/
 
 4. **서버 실행 (API / UI)**
    - FastAPI: `poetry run uvicorn main:app --reload`
+     - **주의**: 서버 시작 시 `saved_models/sentiment_best.pt`이 없거나 로드에 실패하면 서버가 종료됩니다.
    - Gradio 데모: `poetry run python app.py`
+
+> FastAPI 챗봇 엔드포인트는 내부적으로 **비동기 스레드풀**을 사용하여 감정 분석/벡터 검색과 같은 블로킹 작업을 별도 스레드에서 실행하므로, 동시 요청 처리 성능이 개선됩니다.
 
 5. **추론 / 챗봇**
    - 클라이언트에서 입력된 텍스트를 감정분석하고, 필요시 RAG 검색 결과를
