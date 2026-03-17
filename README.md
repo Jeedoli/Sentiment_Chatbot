@@ -30,8 +30,9 @@ sentiment_chatbot/
 │   ├── chat.py              # ChatRequest / ChatResponse Pydantic 모델
 │   └── sentiment.py         # SentimentLabel / SentimentResult Pydantic 모델
 ├── scripts/
-│   ├── preprocess.py        # NSMC 또는 로컬 CSV → train/val/test.csv
-│   ├── train.py             # 파인튜닝 학습 루프 (AdamW + warmup + 조기 종료)
+│   ├── build_dataset.py     # AI Hub 원시 ZIP → 균형 train/val/test.csv 구축
+│   ├── train.py             # 파인튜닝 학습 루프 (클래스 가중치, 조기 종료, MPS)
+│   ├── evaluate.py          # test.csv F1/Accuracy + 실전 채팅 예문 검증
 │   └── build_vectorstore.py # knowledge_base/*.txt → FAISS 인덱스 생성
 ├── services/
 │   ├── chat_service.py      # 감정 분석 → RAG 검색 → LLM 응답 오케스트레이션
@@ -78,21 +79,15 @@ sentiment_chatbot/
 이 프로젝트는 아래 5단계로 구성됩니다.
 
 1. **데이터 준비**
-   - AI Hub, NSMC, 로컬 CSV/Excel/ZIP 등 다양한 형태의 데이터를
-     `scripts/preprocess.py`로 읽어 `data/processed/train.csv`,
-     `val.csv`, `test.csv`로 변환합니다.
-   - `--csv_path`에 디렉터리 또는 ZIP 경로를 지정하면 자동으로 내부
-     파일을 모두 찾아서 병합합니다.
-   - AI Hub 같은 경우, `data/aihub_dataset/Training` 아래에
-     `01.원천데이터`/`02.라벨링데이터` 구조만 맞추면 자동 병합됩니다.
+   - AI Hub 라벨 ZIP 파일들을 `data/aihub_dataset/Training/02.라벨링데이터/`에 위치시킨 후
+     `scripts/build_dataset.py`를 실행하면 자동으로 균형 데이터셋을 구축합니다.
+   - 클래스별 최대 샘플 수를 `--max_per_class`로 조정하며 (기본값 20,000),
+     `data/processed/train.csv`, `val.csv`, `test.csv`가 생성됩니다.
 
 2. **모델 학습**
    - `scripts/train.py`를 실행하면 `train.csv`/`val.csv`를 읽어
      `klue/roberta-base` 기반 분류 모델을 fine‑tune 합니다.
-   - 학습 중 `runs/` 디렉터리에 TensorBoard 로그가 자동 생성됩니다.
-     ```bash
-     tensorboard --logdir runs
-     ```
+   - 학습 중 TensorBoard 로그가 자동 생성됩니다.
    - 학습 중 **val F1이 개선될 때마다** `saved_models/sentiment_best.pt`가
      갱신되고, 마지막 에폭 모델은 `saved_models/sentiment_last.pt`에 저장됩니다.
 
@@ -133,11 +128,9 @@ pip install torch torchvision torchaudio   # macOS
 cp .env.example .env
 # .env 에서 OPENAI_API_KEY 입력
 
-# 3. 샘플 데이터로 테스트 학습 (10 에폭, ~2분)
-# (샘플 데이터가 없으면 아래 명령으로 생성)
-poetry run python scripts/generate_samples.py
-poetry run python scripts/preprocess.py --source local --csv_path data/raw/synthetic_all.csv
-poetry run python scripts/train.py --epochs 10
+# 3. AI Hub 데이터셋 구축 (data/aihub_dataset/ 에 데이터 배치 후)
+poetry run python scripts/build_dataset.py
+poetry run python scripts/train.py --epochs 10 --early_stop 3
 
 # 4. RAG 벡터스토어 빌드
 poetry run python scripts/build_vectorstore.py

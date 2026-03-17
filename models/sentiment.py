@@ -109,7 +109,12 @@ class SentimentInference:
         max_len:      int   = 128,
         escalation_t: float = 0.7,
     ):
-        self.device       = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"   # Apple Silicon GPU
+        else:
+            self.device = "cpu"
         self.max_len      = max_len
         self.escalation_t = escalation_t
 
