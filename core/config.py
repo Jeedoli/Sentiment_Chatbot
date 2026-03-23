@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     vectorstore_path:    str = "data/vectorstore"
     knowledge_base_dir:  str = "knowledge_base"
     top_k_retrieval:     int = 3
-    embedding_model:     str = "text-embedding-3-small"
+    embedding_model:     str = "jhgan/ko-sbert-nli"
 
     # ── 챗봇 ───────────────────────────────────────────────────────────
     max_history_turns:     int   = 10

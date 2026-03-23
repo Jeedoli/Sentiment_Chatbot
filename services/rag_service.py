@@ -11,7 +11,7 @@ import os
 from functools import lru_cache
 
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 from core.config import get_settings
 from core.logging import logger
@@ -30,7 +30,7 @@ def get_vectorstore() -> FAISS | None:
         )
         return None
 
-    embeddings = OpenAIEmbeddings(model=cfg.embedding_model)
+    embeddings = HuggingFaceEmbeddings(model_name=cfg.embedding_model)
     db         = FAISS.load_local(path, embeddings, allow_dangerous_deserialization=True)
     logger.info(f"벡터스토어 로드 완료: {path}")
     return db

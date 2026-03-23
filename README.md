@@ -40,7 +40,7 @@ SentiChat은 두 문장을 다르게 처리합니다:
 
 ```
 ML/DL         klue/roberta-base (110M) · PyTorch 2.x · Transformers · scikit-learn
-LLM Pipeline  LangChain 0.3 LCEL · ChatOpenAI (GPT-4o-mini) · FAISS
+LLM Pipeline  LangChain 0.3 LCEL · ChatOpenAI (GPT-4o-mini) · FAISS · jhgan/ko-sbert-nli
 Backend       FastAPI 0.115 · Pydantic v2 · pydantic-settings · uvicorn
 UI            Gradio 4.x
 Logging       loguru (파일 rotation 30일)

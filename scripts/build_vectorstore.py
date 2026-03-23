@@ -18,7 +18,7 @@ import glob
 import os
 
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 
@@ -57,8 +57,8 @@ def build() -> None:
     docs = load_documents()
     print(f"  총 {len(docs)}개 청크")
 
-    print("[build_vectorstore] 임베딩 생성 중… (OpenAI API 호출)")
-    embeddings = OpenAIEmbeddings()          # .env의 OPENAI_API_KEY 사용
+    print("[build_vectorstore] 임베딩 생성 중… (로컬 모델: jhgan/ko-sbert-nli)")
+    embeddings = HuggingFaceEmbeddings(model_name="jhgan/ko-sbert-nli")
     db         = FAISS.from_texts(docs, embeddings)
 
     os.makedirs(VS_DIR, exist_ok=True)
