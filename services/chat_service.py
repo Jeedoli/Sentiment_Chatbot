@@ -18,6 +18,7 @@ services/chat_service.py
   ChatResponse 반환
 """
 
+import asyncio
 import time
 from collections import defaultdict
 
@@ -76,9 +77,12 @@ async def chat(session_id: str, message: str) -> ChatResponse:
     cfg = get_settings()
     logger.info(f"[chat] session={session_id} | msg={message[:50]}")
 
-    # 1. 감정 분석 (CPU/GPU 추론이므로 이벤트 루프를 블로킹하지 않도록 스레드에서 실행)
+    # 1 & 2: 감정 분석 + RAG 검색 병렬 실행 (서로 독립적이므로 동시에 처리)
     t0 = time.perf_counter()
-    sentiment_out = await run_in_threadpool(sentiment_service.analyze, message)
+    sentiment_out, retrieved = await asyncio.gather(
+        run_in_threadpool(sentiment_service.analyze, message),
+        run_in_threadpool(rag_service.retrieve, message),
+    )
     t1 = time.perf_counter()
 
     logger.info(
@@ -86,14 +90,8 @@ async def chat(session_id: str, message: str) -> ChatResponse:
         f"(neg={sentiment_out.negative:.2f} pos={sentiment_out.positive:.2f}) "
         f"(t={t1-t0:.2f}s)"
     )
-
-    # 2. RAG 검색 (OpenAI API 호출/디스크 I/O 등이 포함될 수 있어 비동기 스레드 사용)
-    t0 = time.perf_counter()
-    retrieved = await run_in_threadpool(rag_service.retrieve, message)
-    t1 = time.perf_counter()
-    context   = "\n\n".join(retrieved) if retrieved else ""
-    sources   = [chunk[:60] + "…" for chunk in retrieved]
-
+    context = "\n\n".join(retrieved) if retrieved else ""
+    sources = [chunk[:60] + "…" for chunk in retrieved]
     logger.info(f"[rag] retrieved={len(retrieved)} (t={t1-t0:.2f}s)")
 
     # 3. LLM 응답 생성 (히스토리 포함)
