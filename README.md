@@ -328,6 +328,23 @@ Redis 연동은 인프라 의존성이 생기고 데모 프로젝트 범위를 �
 
 ---
 
+## 개발 중 마주쳤던 이슈
+
+**RAG 응답이 매 요청마다 5초 이상 걸리는 문제**  
+FAISS 자체는 ms 단위로 빠른데, 사용자 쿼리를 벡터로 변환할 때마다  
+OpenAI `text-embedding-3-small` API를 호출하는 구조가 병목이었습니다.  
+`jhgan/ko-sbert-nli` 로컬 모델로 교체해 API 호출을 없애고  
+RAG 속도를 **~5.2s → ~0.2s**로 단축했습니다.  
+추가로 감정 분석과 RAG 검색을 `asyncio.gather`로 병렬 실행하도록 개선했습니다.
+
+**모델 교체 후 Gradio에서 여전히 이전 모델 오류가 나는 문제**  
+`.env`를 올바르게 수정했는데도 에러가 사라지지 않았는데,  
+OS 레벨 환경변수 `EMBEDDING_MODEL=text-embedding-3-small`이 `.env` 파일보다  
+우선순위가 높아 덮어쓰고 있었기 때문입니다.  
+해당 세션에서 `unset EMBEDDING_MODEL` 후 앱을 재시작해 해결했습니다.
+
+---
+
 ## 테스트
 
 ```bash
