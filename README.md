@@ -346,9 +346,13 @@ FastAPI는 `lifespan` 이벤트로 서버 시작 시 모델을 미리 로드하�
 
 **모델 교체 후 Gradio에서 여전히 이전 모델 오류가 나는 문제**  
 `.env`를 올바르게 수정했는데도 에러가 사라지지 않았는데,  
-OS 레벨 환경변수 `EMBEDDING_MODEL=text-embedding-3-small`이 `.env` 파일보다  
-우선순위가 높아 덮어쓰고 있었기 때문입니다.  
-해당 세션에서 `unset EMBEDDING_MODEL` 후 앱을 재시작해 해결했습니다.
+OS 레벨 환경변수가 `.env` 파일보다 pydantic-settings 우선순위가 높아 덮어쓰고 있었습니다.  
+`settings_customise_sources`를 오버라이드해 `.env > OS 환경변수` 순서로 변경,  
+어떤 터미널 세션에서 실행해도 `.env` 기준으로 동작하도록 근본 해결했습니다.
+
+**Gradio 버전 업그레이드 후 `theme` 파라미터 경고**  
+Gradio 6.x부터 `gr.Blocks(theme=...)` 방식이 deprecated되어 `UserWarning`이 발생했습니다.  
+`demo.launch(theme=...)` 으로 이동해 해결했습니다.
 
 ---
 
