@@ -337,6 +337,13 @@ OpenAI `text-embedding-3-small` API를 호출하는 구조가 병목이었습니
 RAG 속도를 **~5.2s → ~0.2s**로 단축했습니다.  
 추가로 감정 분석과 RAG 검색을 `asyncio.gather`로 병렬 실행하도록 개선했습니다.
 
+**Gradio 첫 메시지에서 5초 지연이 발생하는 문제**  
+FastAPI는 `lifespan` 이벤트로 서버 시작 시 모델을 미리 로드하지만,  
+`app.py`(Gradio)에는 워밍업이 없어 첫 메시지 시점에 440MB 임베딩 모델을  
+디스크에서 로드하느라 5초가 걸렸습니다.  
+`app.py` 시작 시 `sentiment_service`와 `rag_service`를 직접 호출해 미리 로드하도록 수정,  
+이후 모든 메시지에서 지연이 사라졌습니다.
+
 **모델 교체 후 Gradio에서 여전히 이전 모델 오류가 나는 문제**  
 `.env`를 올바르게 수정했는데도 에러가 사라지지 않았는데,  
 OS 레벨 환경변수 `EMBEDDING_MODEL=text-embedding-3-small`이 `.env` 파일보다  

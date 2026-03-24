@@ -21,6 +21,7 @@ Gradio 기반 챗봇 데모 UI.
   └──────────────────────────────────────────────────────────┘
 """
 
+import asyncio
 import os
 import uuid
 
@@ -28,9 +29,27 @@ import gradio as gr
 
 from core.config import get_settings
 from core.logging import logger
+from services import chat_service, rag_service, sentiment_service
 
 cfg        = get_settings()
 _session_id = str(uuid.uuid4())   # 데모용 단일 세션
+
+
+# ── 서버 시작 시 모델/벡터스토어 워밍업 ──────────────────────────────────────
+# Gradio는 FastAPI lifespan이 없으므로 직접 미리 로드합니다.
+# 첫 번째 메시지에서 5초 지연이 발생하는 것을 방지합니다.
+logger.info("워밍업 시작 (감정 모델 + 벡터스토어)…")
+try:
+    sentiment_service.get_sentiment_service()
+    logger.info("감정 모델 로드 완료")
+except Exception as e:
+    logger.warning(f"감정 모델 로드 실패: {e}")
+try:
+    rag_service.get_vectorstore()
+    logger.info("벡터스토어 로드 완료")
+except Exception as e:
+    logger.warning(f"벡터스토어 로드 실패: {e}")
+logger.info("워밍업 완료 — 챗봇 준비됨")
 
 
 # ── 감정 이모지 매핑 ──────────────────────────────────────────────────────
@@ -64,8 +83,6 @@ def respond(message: str, history: list[list]) -> tuple[str, list[list], str, st
 
     # 모델 미학습 시 안내
     try:
-        from services import chat_service
-        import asyncio
         result = asyncio.run(chat_service.chat(_session_id, message))
     except FileNotFoundError:
         tip = (
@@ -111,8 +128,7 @@ def respond(message: str, history: list[list]) -> tuple[str, list[list], str, st
 
 def reset_chat() -> tuple[list, str, str]:
     """대화 히스토리 초기화"""
-    from services import chat_service as cs
-    cs.clear_history(_session_id)
+    chat_service.clear_history(_session_id)
     return [], "", ""
 
 
