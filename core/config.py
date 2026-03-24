@@ -6,7 +6,8 @@ pydantic-settings 기반 전역 설정 관리.
 """
 
 from functools import lru_cache
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Tuple, Type
+from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 
 
 class Settings(BaseSettings):
@@ -15,6 +16,20 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        **kwargs,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        # .env 파일이 OS 환경변수보다 우선하도록 순서 변경
+        # 기본: init > env(OS) > dotenv(.env)
+        # 변경: init > dotenv(.env) > env(OS)
+        return (init_settings, dotenv_settings, env_settings, *kwargs.values())
 
     # ── OpenAI ─────────────────────────────────────────────────────────
     openai_api_key:    str   = ""

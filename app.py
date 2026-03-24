@@ -133,7 +133,7 @@ def reset_chat() -> tuple[list, str, str]:
 
 
 # ── Gradio UI 조립 ────────────────────────────────────────────────────────
-with gr.Blocks(title="SentiChat — 감정 분석 챗봇", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="SentiChat — 감정 분석 챗봇") as demo:
     gr.Markdown(
         "# 🤖 SentiChat\n"
         "**고객 문의 감정 분석 기반 AI 챗봇 서비스**\n\n"
@@ -187,4 +187,5 @@ if __name__ == "__main__":
         server_port = cfg.gradio_port,
         share       = cfg.gradio_share,
         inbrowser   = True,
+        theme       = gr.themes.Soft(),
     )
