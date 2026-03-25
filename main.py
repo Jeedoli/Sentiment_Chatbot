@@ -75,7 +75,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins     = ["*"],   # 프로덕션에서는 특정 도메인으로 제한
-    allow_credentials = True,
+    allow_credentials = False,  # allow_origins=["*"]와 True 조합은 CORS 스펙 위반
     allow_methods     = ["*"],
     allow_headers     = ["*"],
 )

@@ -16,7 +16,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     """챗봇 요청 본문"""
-    session_id: str  = Field(..., description="세션 식별자 (프론트/클라이언트가 생성)")
+    session_id: str  = Field(..., min_length=1, max_length=128, description="세션 식별자 (프론트/클라이언트가 생성)")
     message:    str  = Field(..., min_length=1, max_length=1000, description="사용자 입력 메시지")
 
 

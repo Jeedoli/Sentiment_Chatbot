@@ -37,4 +37,9 @@ class SentimentRequest(BaseModel):
 
 
 class BatchSentimentRequest(BaseModel):
-    texts: list[str] = Field(..., min_length=1, description="배치 분석할 텍스트 목록")
+    texts: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="배치 분석할 텍스트 목록 (최대 50건)",
+    )

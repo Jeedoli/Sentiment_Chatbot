@@ -88,7 +88,7 @@ def respond(message: str, history: list[list]) -> tuple[str, list[list], str, st
         tip = (
             "⚠ 학습된 모델이 없습니다.\n\n"
             "먼저 아래 명령어를 실행해 주세요:\n"
-            "  1. poetry run python scripts/preprocess.py --source sample\n"
+            "  1. poetry run python scripts/build_dataset.py\n"
             "  2. poetry run pip install torch\n"
             "  3. poetry run python scripts/train.py\n"
         )
