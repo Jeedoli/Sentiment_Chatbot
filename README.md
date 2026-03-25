@@ -326,16 +326,6 @@ FastAPI 이벤트 루프가 통째로 멈춥니다. `run_in_threadpool`로 별�
 Redis 연동은 인프라 의존성이 생기고 데모 프로젝트 범위를 벗어납니다.  
 `defaultdict`로 간단하게 구현하되, 주석에 Redis 교체 지점을 명시했습니다.
 
-**CORS 설정 — `allow_credentials=False`로 둔 이유**  
-`allow_origins=["*"]`(와일드카드)와 `allow_credentials=True`를 같이 쓰면  
-CORS 스펙(RFC 6454) 위반으로 브라우저가 자격증명 요청을 거부합니다.  
-이 서비스는 쿠키·인증 헤더 없이 동작하므로 `allow_credentials=False`가 올바른 설정입니다.
-
-**입력값 길이 제한을 Schema에서 강제하는 이유**  
-`session_id`(최대 128자), `message`(최대 1000자), 배치 텍스트(최대 50건)에 상한을 걸었습니다.  
-제한이 없으면 거대한 키로 `_history` dict를 가득 채우거나,  
-수천 건 배치 요청으로 메모리를 고갈시키는 DoS 공격이 가능합니다.
-
 ---
 
 ## 개발 중 마주쳤던 이슈
