@@ -330,29 +330,37 @@ Redis 연동은 인프라 의존성이 생기고 데모 프로젝트 범위를 �
 
 ## 개발 중 마주쳤던 이슈
 
-**RAG 응답이 매 요청마다 5초 이상 걸리는 문제**  
-FAISS 자체는 ms 단위로 빠른데, 사용자 쿼리를 벡터로 변환할 때마다  
-OpenAI `text-embedding-3-small` API를 호출하는 구조가 병목이었습니다.  
-`jhgan/ko-sbert-nli` 로컬 모델로 교체해 API 호출을 없애고  
-RAG 속도를 **~5.2s → ~0.2s**로 단축했습니다.  
-추가로 감정 분석과 RAG 검색을 `asyncio.gather`로 병렬 실행하도록 개선했습니다.
+---
 
-**Gradio 첫 메시지에서 5초 지연이 발생하는 문제**  
-FastAPI는 `lifespan` 이벤트로 서버 시작 시 모델을 미리 로드하지만,  
-`app.py`(Gradio)에는 워밍업이 없어 첫 메시지 시점에 440MB 임베딩 모델을  
-디스크에서 로드하느라 5초가 걸렸습니다.  
-`app.py` 시작 시 `sentiment_service`와 `rag_service`를 직접 호출해 미리 로드하도록 수정,  
-이후 모든 메시지에서 지연이 사라졌습니다.
+**이슈 1 — RAG 응답이 매 요청마다 5초 이상 걸리는 문제**
+- **원인** : 쿼리를 벡터로 변환할 때마다 OpenAI `text-embedding-3-small` API를 호출 → 네트워크 왕복 ~5.2s
+- **해결** : `jhgan/ko-sbert-nli` 로컬 임베딩 모델로 교체 → RAG **~5.2s → ~0.2s**, 임베딩 비용 **$0**
+- **추가** : 감정 분석 + RAG를 `asyncio.gather`로 병렬 실행 → 총 응답 **~8s → ~3s**
 
-**모델 교체 후 Gradio에서 여전히 이전 모델 오류가 나는 문제**  
-`.env`를 올바르게 수정했는데도 에러가 사라지지 않았는데,  
-OS 레벨 환경변수가 `.env` 파일보다 pydantic-settings 우선순위가 높아 덮어쓰고 있었습니다.  
-`settings_customise_sources`를 오버라이드해 `.env > OS 환경변수` 순서로 변경,  
-어떤 터미널 세션에서 실행해도 `.env` 기준으로 동작하도록 근본 해결했습니다.
+| 구간 | 개선 전 | 개선 후 |
+|---|---|---|
+| RAG 검색 (요청당) | ~5.22s | ~0.21s |
+| 임베딩 API 비용 | 요청마다 과금 | **$0** |
+| 총 응답 시간 (채팅 1회) | ~8s | **~3s** |
 
-**Gradio 버전 업그레이드 후 `theme` 파라미터 경고**  
-Gradio 6.x부터 `gr.Blocks(theme=...)` 방식이 deprecated되어 `UserWarning`이 발생했습니다.  
-`demo.launch(theme=...)` 으로 이동해 해결했습니다.
+---
+
+**이슈 2 — Gradio 첫 메시지에서 5~6초 지연**
+- **원인** : FastAPI는 `lifespan`으로 서버 시작 시 모델을 워밍업하지만, `app.py`에는 워밍업이 없어 첫 메시지 시점에 440MB 모델을 디스크에서 로드
+- **해결** : `app.py` 모듈 레벨에서 `get_sentiment_service()` · `get_vectorstore()` 직접 호출 → 5초 대기가 "첫 메시지"에서 "앱 시작"으로 이동
+
+---
+
+**이슈 3 — `.env` 수정 후에도 이전 모델을 계속 찾는 문제**
+- **원인** : pydantic-settings 기본 우선순위는 `OS 환경변수 > .env` — 이전 세션의 `export EMBEDDING_MODEL=text-embedding-3-small`이 OS에 잔류
+- **임시 해결** : `unset EMBEDDING_MODEL && poetry run python app.py`
+- **근본 해결** : `settings_customise_sources` 오버라이드로 `.env > OS 환경변수` 순서로 변경
+
+---
+
+**이슈 4 — Gradio 6.x 업그레이드 후 `theme` 파라미터 경고**
+- **원인** : Gradio 6.0에서 `gr.Blocks(theme=...)` deprecated → `launch()`로 이동
+- **해결** : `demo.launch(theme=gr.themes.Soft())`로 변경
 
 ---
 
