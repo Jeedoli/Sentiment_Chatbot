@@ -64,6 +64,7 @@ def _build_chain():
         model       = cfg.openai_model,
         temperature = cfg.openai_temperature,
         api_key     = cfg.openai_api_key,
+        max_tokens  = 200,   # 한국어 200자 ≈ 150~200 tokens; 생성 상한선으로 긴 응답 시 100~300ms 단축
     )
     prompt = ChatPromptTemplate.from_messages([
         ("system", _SYSTEM),
