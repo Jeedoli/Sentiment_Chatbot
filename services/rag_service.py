@@ -8,7 +8,6 @@ data/vectorstore/ 인덱스를 로드하여 관련 문서를 검색합니다.
 """
 
 import os
-from functools import lru_cache
 
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -17,9 +16,21 @@ from core.config import get_settings
 from core.logging import logger
 
 
-@lru_cache
+_vectorstore_cache: FAISS | None = None
+_vectorstore_loaded: bool = False
+
+
 def get_vectorstore() -> FAISS | None:
-    """벡터스토어 singleton 로더. 파일이 없으면 None 반환."""
+    """벡터스토어 singleton 로더.
+    
+    - 파일이 없으면 None 반환 (None은 캐싱하지 않아 이후 빌드 후 재시도 가능)
+    - 성공적으로 로드된 경우에만 캐싱
+    """
+    global _vectorstore_cache, _vectorstore_loaded
+
+    if _vectorstore_loaded:
+        return _vectorstore_cache
+
     cfg  = get_settings()
     path = cfg.vectorstore_path
 
@@ -28,11 +39,13 @@ def get_vectorstore() -> FAISS | None:
             f"벡터스토어 없음: {path}/index.faiss\n"
             "poetry run python scripts/build_vectorstore.py 를 먼저 실행하세요."
         )
-        return None
+        return None  # None은 캐싱하지 않음 — 빌드 후 재호출 가능
 
     embeddings = HuggingFaceEmbeddings(model_name=cfg.embedding_model)
     db         = FAISS.load_local(path, embeddings, allow_dangerous_deserialization=True)
     logger.info(f"벡터스토어 로드 완료: {path}")
+    _vectorstore_cache  = db
+    _vectorstore_loaded = True
     return db
 
 

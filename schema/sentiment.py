@@ -5,7 +5,7 @@ schema/sentiment.py
 """
 
 from enum import IntEnum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SentimentLabel(IntEnum):
@@ -43,3 +43,13 @@ class BatchSentimentRequest(BaseModel):
         max_length=50,
         description="배치 분석할 텍스트 목록 (최대 50건)",
     )
+
+    @field_validator("texts")
+    @classmethod
+    def validate_text_lengths(cls, v: list[str]) -> list[str]:
+        for i, text in enumerate(v):
+            if len(text) < 1:
+                raise ValueError(f"texts[{i}]: 텍스트는 1자 이상이어야 합니다")
+            if len(text) > 1000:
+                raise ValueError(f"texts[{i}]: 텍스트는 1000자 이하여야 합니다 (현재 {len(text)}자)")
+        return v

@@ -127,7 +127,7 @@ class SentimentInference:
                 "먼저  poetry run python scripts/train.py  를 실행하세요."
             )
         self.model.load_state_dict(
-            torch.load(ckpt_path, map_location=self.device)
+            torch.load(ckpt_path, map_location=self.device, weights_only=True)
         )
         self.model.to(self.device).eval()
 

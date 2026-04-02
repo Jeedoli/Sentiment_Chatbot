@@ -19,15 +19,17 @@ services/chat_service.py
 """
 
 import asyncio
+import functools
 import time
-from collections import defaultdict
 
 try:
     # FastAPI가 설치된 환경에서는 이벤트 루프를 블로킹하지 않기 위해 run_in_threadpool 사용
     from fastapi.concurrency import run_in_threadpool
 except ImportError:  # 테스트/CI 환경에서 FastAPI가 없을 수도 있음
-    def run_in_threadpool(func, *args, **kwargs):
-        return func(*args, **kwargs)
+    import functools
+    async def run_in_threadpool(func, *args, **kwargs):  # type: ignore[misc]
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
 
 try:
     from langchain_core.messages import AIMessage, HumanMessage
@@ -47,7 +49,22 @@ from services import rag_service, sentiment_service
 
 # ── 세션 히스토리 in-memory 저장소 ─────────────────────────────────────────
 # 실제 서비스에서는 Redis나 DB로 교체하세요.
-_history: dict[str, list] = defaultdict(list)
+# 최대 세션 수를 제한해 OOM/DoS 방지 (maxsize=5000)
+
+_MAX_SESSIONS = 5_000
+_history: dict[str, list] = {}
+
+
+def _get_history(session_id: str) -> list:
+    """세션 히스토리 반환. 최대 세션 수 초과 시 가장 오래된 세션 제거."""
+    if session_id not in _history:
+        if len(_history) >= _MAX_SESSIONS:  # noqa: PLR2004
+            # 가장 오래된 세션 제거 (dict는 Python 3.7+ 삽입 순서 보장)
+            oldest = next(iter(_history))
+            del _history[oldest]
+            logger.warning(f"세션 수 상한({_MAX_SESSIONS}) 도달 — 오래된 세션 제거: {oldest[:8]}…")
+        _history[session_id] = []
+    return _history[session_id]
 
 # 체인 singleton (LangChain 미설치 환경에서는 None)
 _chat_chain = SentimentChatChain() if SentimentChatChain is not None else None
@@ -101,7 +118,7 @@ async def chat(session_id: str, message: str) -> ChatResponse:
             "pip install langchain langchain-openai 등을 설치해주세요."
         )
 
-    history = _history[session_id]
+    history = _get_history(session_id)
     t0 = time.perf_counter()
     answer  = await _chat_chain.ainvoke(
         message   = message,
@@ -118,6 +135,7 @@ async def chat(session_id: str, message: str) -> ChatResponse:
     max_msgs = cfg.max_history_turns * 2
     if len(history) > max_msgs:
         _history[session_id] = history[-max_msgs:]
+        history = _history[session_id]
 
     return ChatResponse(
         session_id = session_id,

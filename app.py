@@ -31,8 +31,7 @@ from core.config import get_settings
 from core.logging import logger
 from services import chat_service, rag_service, sentiment_service
 
-cfg        = get_settings()
-_session_id = str(uuid.uuid4())   # 데모용 단일 세션
+cfg = get_settings()
 
 
 # ── 서버 시작 시 모델/벡터스토어 워밍업 ──────────────────────────────────────
@@ -81,9 +80,13 @@ def respond(message: str, history: list[list]) -> tuple[str, list[list], str, st
     if not message.strip():
         return "", history, "", ""
 
+    # 요청마다 고유 세션 ID를 사용하되, history에서 복원 (멀티유저 혼재 방지)
+    # Gradio state로 세션을 관리하지 않으므로 호출 스택의 history 길이를 키로 활용
+    session_id = str(uuid.uuid4()) if not history else history[0].get("session_id", str(uuid.uuid4()))
+
     # 모델 미학습 시 안내
     try:
-        result = asyncio.run(chat_service.chat(_session_id, message))
+        result = asyncio.run(chat_service.chat(session_id, message))
     except FileNotFoundError:
         tip = (
             "⚠ 학습된 모델이 없습니다.\n\n"
@@ -99,7 +102,7 @@ def respond(message: str, history: list[list]) -> tuple[str, list[list], str, st
     except Exception as e:
         logger.error(f"chat error: {e}")
         history.append({"role": "user", "content": message})
-        history.append({"role": "assistant", "content": f"오류가 발생했습니다: {e}"})
+        history.append({"role": "assistant", "content": "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."})
         return "", history, "", ""
 
     # 대화 히스토리 업데이트
